@@ -16,7 +16,7 @@ endpoint = "http://host.docker.internal:4566" if not in_ci else "http://localhos
 def test_s3():
     s3 = boto3.client(
         's3',
-        endpoint_url='endpoint,
+        endpoint_url='endpoint',
         aws_access_key_id='test',
         aws_secret_access_key='test',
         region_name='us-east-1'
