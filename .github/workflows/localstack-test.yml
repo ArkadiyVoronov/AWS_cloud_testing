@@ -1,41 +1,37 @@
-name: LocalStack CI Test
+version: "3.8"
 
-on: [push, pull_request]
+services:
+  localstack:
+    container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
+    image: localstack/localstack:3.7
+    ports:
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
+    environment:
+      - DEBUG=${DEBUG:-0}
+      - PERSISTENCE=0
+      - SERVICES=s3,dynamodb
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install boto3 pytest
-
-      - name: Start LocalStack
-        run: docker compose up -d
-
-      - name: Wait for LocalStack to be ready
-        run: |
-          for i in {1..30}; do
-            if docker compose exec localstack curl -sf http://localhost:4569/_localstack/health >/dev/null 2>&1; then
-              echo "LocalStack is ready"
-              break
-            fi
-            sleep 2
-          done
-          docker compose logs localstack
-
-      - name: Run integration tests
-        run: python tests/test_localstack.py
-
-      - name: Shutdown
-        if: always()
-        run: docker compose down -v
+  tester:
+    image: python:3.11-slim
+    volumes:
+      - ./tests:/app/tests
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "
+        pip install boto3 &&
+        python tests/test_localstack.py
+      "
+    depends_on:
+      localstack:
+        condition: service_healthy
