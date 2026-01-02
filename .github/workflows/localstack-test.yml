@@ -1,0 +1,41 @@
+name: LocalStack CI Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 pytest
+
+      - name: Start LocalStack
+        run: docker compose up -d
+
+      - name: Wait for LocalStack to be ready
+        run: |
+          for i in {1..30}; do
+            if docker compose exec localstack curl -sf http://localhost:4569/_localstack/health >/dev/null 2>&1; then
+              echo "LocalStack is ready"
+              break
+            fi
+            sleep 2
+          done
+          docker compose logs localstack
+
+      - name: Run integration tests
+        run: python tests/test_localstack.py
+
+      - name: Shutdown
+        if: always()
+        run: docker compose down -v
